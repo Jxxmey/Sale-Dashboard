@@ -36,9 +36,6 @@ async def upload_file(period: str, file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"เกิดข้อผิดพลาดในการบันทึกไฟล์: {str(e)}")
 
-# ==========================================
-# 1. API สรุปยอดขายหลัก (รายบุคคล)
-# ==========================================
 @router.get("/summary/{period}")
 def get_sales_summary(period: str, date: Optional[str] = None):
     filepath = get_filepath(period)
@@ -101,6 +98,11 @@ def get_sales_summary(period: str, date: Optional[str] = None):
         df['Grouped_Cat'] = df.apply(assign_category, axis=1)
         df['Calculate_Value'] = np.where(df['Grouped_Cat'].isin(['Cover+', 'Sim']), df['Number'], df['ราคาขายตามบิล'])
 
+        # 🌟 คำนวณเฉพาะจำนวนเครื่อง iPhone ที่ขายได้ (iPhone Units) สำหรับนำไปหารเปอร์เซ็นต์พ่วง
+        iphone_mask = df['Grouped_Cat'] == 'iPhone'
+        iphone_units_df = df[iphone_mask].groupby([officer_id_col, 'Officer (Name)'])['Number'].sum().reset_index()
+        iphone_units_df.rename(columns={'Number': 'iPhone_Units'}, inplace=True)
+
         iphone18_mask = df['Sub Category'].isin(['IPHONE 18 PRO', 'IPHONE 18 PRO MAX'])
         iphone18_df = df[iphone18_mask].copy()
         iphone18_sales = iphone18_df.groupby([officer_id_col, 'Officer (Name)'])['Calculate_Value'].sum().reset_index()
@@ -115,11 +117,13 @@ def get_sales_summary(period: str, date: Optional[str] = None):
         ufund_counts = ufund_df.groupby([officer_id_col, 'Officer (Name)'])['Number'].sum().reset_index()
         ufund_counts.rename(columns={'Number': 'UFUND PERSONAL'}, inplace=True)
 
-        # Merge ทุกอย่าง
         final_df = pd.merge(sales_pivot, ufund_counts, on=[officer_id_col, 'Officer (Name)'], how='left')
         final_df = pd.merge(final_df, iphone18_sales, on=[officer_id_col, 'Officer (Name)'], how='left')
+        final_df = pd.merge(final_df, iphone_units_df, on=[officer_id_col, 'Officer (Name)'], how='left')
+
         final_df['UFUND PERSONAL'] = final_df['UFUND PERSONAL'].fillna(0).astype(int)
         final_df['iPhone_18'] = final_df['iPhone_18'].fillna(0)
+        final_df['iPhone_Units'] = final_df['iPhone_Units'].fillna(0).astype(int)
 
         for col in ["Mac", "iPad", "iPhone", "Apple Watch", "Cover+", "Sim", "ABA", "3RD", "PVL"]:
             if col not in final_df.columns: final_df[col] = 0
@@ -149,9 +153,6 @@ def get_sales_summary(period: str, date: Optional[str] = None):
         return final_df.to_dict(orient="records")
     except Exception as e: return []
 
-# ==========================================
-# 🌟 2. API สรุป PC (อัปเดตเพิ่ม RTB)
-# ==========================================
 @router.get("/summary/pc/{period}")
 def get_pc_summary(period: str, date: Optional[str] = None):
     filepath = get_filepath(period)
@@ -159,19 +160,11 @@ def get_pc_summary(period: str, date: Optional[str] = None):
     try:
         df = pd.read_csv(filepath, sep=None, engine='python')
         df.columns = df.columns.str.strip()
-
         df['ราคาขายตามบิล'] = pd.to_numeric(df['ราคาขายตามบิล'].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
-        df['Number'] = pd.to_numeric(df['Number'].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
         
-        df['Category (Name)'] = df['Category (Name)'].fillna('').astype(str).str.strip().str.upper()
         df['Brand'] = df['Brand'].fillna('').astype(str).str.strip().str.upper()
-
-        def clean_brand(b):
-            return str(b).upper().replace(' ', '')
-            
-        df['Clean_Brand'] = df['Brand'].apply(clean_brand)
+        df['Clean_Brand'] = df['Brand'].apply(lambda b: str(b).upper().replace(' ', ''))
         
-        # 🌟 เพิ่มค่าย RTB และแบรนด์ Uniq, Enegia, B&O
         pc_mapping = {
             'AMAZINGTHING': 'Maitreechit', 'LAUT': 'Maitreechit', 'ENERGIZER': 'Maitreechit', 'AVOCADO': 'Maitreechit',
             'PIXEL': 'DPLUS Together', 'ABLEMEN': 'DPLUS Together', 'WHY': 'DPLUS Together',
@@ -194,9 +187,5 @@ def get_pc_summary(period: str, date: Optional[str] = None):
             
         summary = pc_df.groupby(['Company', 'Std_Brand'])['ราคาขายตามบิล'].sum().reset_index()
         summary.rename(columns={'ราคาขายตามบิล': 'Sales', 'Std_Brand': 'Brand'}, inplace=True)
-        
         return summary.to_dict(orient="records")
-
-    except Exception as e:
-        print(f"[X] เกิดข้อผิดพลาดในการดึงข้อมูล PC: {e}")
-        return []
+    except Exception as e: return []
