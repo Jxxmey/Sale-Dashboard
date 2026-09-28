@@ -1,22 +1,21 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { Lock, FileSpreadsheet, UploadCloud, LogOut, CheckCircle } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 function Admin() {
-  // State สำหรับระบบล็อคอิน
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState(false);
 
-  // State สำหรับอัปโหลดข้อมูล
   const [period, setPeriod] = useState('thismonth');
   const [textData, setTextData] = useState('');
   const [loading, setLoading] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
 
   const handleLogin = (e) => {
     e.preventDefault();
-    // 🔒 เปลี่ยนรหัสผ่านที่คุณต้องการได้ที่นี่
     if (password === 'Comseven') {
       setIsAuthenticated(true);
       setLoginError(false);
@@ -31,6 +30,7 @@ function Admin() {
       return;
     }
     setLoading(true);
+    setSuccessMsg('');
     try {
       const blob = new Blob([textData], { type: 'text/csv' });
       const formData = new FormData();
@@ -40,8 +40,11 @@ function Admin() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      alert('อัปเดตข้อมูลสำเร็จ!');
-      setTextData(''); 
+      setSuccessMsg('อัปเดตข้อมูลสำเร็จเรียบร้อยแล้ว!');
+      setTextData('');
+      
+      // ลบข้อความสำเร็จหลังจาก 3 วินาที
+      setTimeout(() => setSuccessMsg(''), 3000);
     } catch (error) {
       console.error("Upload error:", error);
       alert('เกิดข้อผิดพลาดในการอัปเดตข้อมูล');
@@ -49,71 +52,100 @@ function Admin() {
     setLoading(false);
   };
 
-  // ------------------------------------------------------------------
-  // 1. หน้าจอใส่รหัสผ่าน (แสดงผลเมื่อยังไม่ได้ล็อกอิน)
-  // ------------------------------------------------------------------
   if (!isAuthenticated) {
     return (
-      <div className="max-w-md mx-auto mt-20 bg-white p-8 rounded-xl shadow-sm border border-gray-100">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">เข้าสู่ระบบ Admin</h2>
-        <form onSubmit={handleLogin} className="flex flex-col gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
-            <input
-              type="password"
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-              placeholder="กรุณาใส่รหัสผ่าน..."
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-            />
-            {loginError && <p className="text-red-500 text-sm mt-2 font-medium">รหัสผ่านไม่ถูกต้อง!</p>}
+      <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 font-sans">
+        <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100 w-full max-w-md relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
+          
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 shadow-inner">
+              <Lock size={32} />
+            </div>
           </div>
-          <button
-            type="submit"
-            className="w-full bg-gray-800 text-white font-bold py-3 rounded-lg hover:bg-gray-900 transition-colors"
-          >
-            ยืนยัน
-          </button>
-        </form>
+          
+          <h2 className="text-2xl font-black text-slate-800 text-center mb-2">Admin Portal</h2>
+          <p className="text-slate-500 text-sm text-center mb-8">กรุณากรอกรหัสผ่านเพื่อเข้าสู่ระบบจัดการข้อมูล</p>
+          
+          <form onSubmit={handleLogin} className="flex flex-col gap-5">
+            <div>
+              <input
+                type="password"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all text-center font-bold tracking-widest text-lg"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoFocus
+              />
+              {loginError && <p className="text-rose-500 text-xs mt-2 font-bold text-center">❌ รหัสผ่านไม่ถูกต้อง โปรดลองอีกครั้ง</p>}
+            </div>
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-slate-800 to-slate-700 text-white font-bold py-4 rounded-xl hover:shadow-lg hover:-translate-y-0.5 transition-all"
+            >
+              เข้าสู่ระบบ
+            </button>
+          </form>
+        </div>
       </div>
     );
   }
 
-  // ------------------------------------------------------------------
-  // 2. หน้าจอจัดการระบบ (แสดงผลเมื่อรหัสผ่านถูกต้อง)
-  // ------------------------------------------------------------------
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">จัดการระบบ (Admin)</h1>
+    <div className="max-w-4xl mx-auto pb-10 font-sans">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-8 gap-4">
+        <div>
+           <h1 className="text-3xl font-black bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600 tracking-tight">
+            Data Management
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">อัปเดตข้อมูลยอดขายและเป้าหมาย</p>
+        </div>
+        
         <button 
           onClick={() => setIsAuthenticated(false)}
-          className="text-sm text-red-600 hover:text-red-800 font-medium bg-red-50 px-4 py-2 rounded-lg"
+          className="flex items-center justify-center gap-2 text-sm text-rose-600 hover:text-white font-bold bg-rose-50 hover:bg-rose-500 px-5 py-2.5 rounded-xl transition-all border border-rose-100 hover:border-rose-500"
         >
+          <LogOut size={16} />
           ออกจากระบบ
         </button>
       </div>
       
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <div className="flex flex-col md:flex-row justify-between md:items-center mb-4 gap-4">
-          <h2 className="text-xl font-bold text-gray-800">อัปเดตข้อมูลระบบ</h2>
-          <select 
-            className="p-2 border border-gray-300 rounded-lg bg-white shadow-sm font-medium focus:ring-blue-500 focus:border-blue-500"
-            value={period} 
-            onChange={(e) => setPeriod(e.target.value)}
-          >
-            <option value="thismonth">ยอดขายเดือนนี้ (This Month)</option>
-            <option value="lastmonth">ยอดขายเดือนที่แล้ว (Last Month)</option>
-            <option value="lastyear">ยอดขายปีที่แล้ว (Last Year)</option>
-            <option value="target">ข้อมูลเป้าหมาย (Target)</option>
-          </select>
+      <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-lg border border-slate-100 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50 rounded-bl-full -mr-10 -mt-10 opacity-50 pointer-events-none"></div>
+
+        {successMsg && (
+          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 text-emerald-700 animate-pulse">
+            <CheckCircle size={20} className="text-emerald-500" />
+            <span className="font-bold">{successMsg}</span>
+          </div>
+        )}
+
+        <div className="flex flex-col md:flex-row justify-between md:items-end mb-6 gap-4 relative z-10">
+          <div>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">เลือกประเภทข้อมูล</label>
+            <div className="relative">
+              <select 
+                className="appearance-none w-full md:w-72 p-3.5 pl-10 border border-slate-200 rounded-xl bg-slate-50 font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all shadow-sm"
+                value={period} 
+                onChange={(e) => setPeriod(e.target.value)}
+              >
+                <option value="thismonth">📊 ยอดขายเดือนนี้ (This Month)</option>
+                <option value="lastmonth">📉 ยอดขายเดือนที่แล้ว (Last Month)</option>
+                <option value="lastyear">📅 ยอดขายปีที่แล้ว (Last Year)</option>
+                <option value="target">🎯 ข้อมูลเป้าหมาย (Target)</option>
+              </select>
+              <FileSpreadsheet size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            </div>
+          </div>
         </div>
         
-        <p className="text-sm text-gray-500 mb-4">คัดลอกข้อมูลตารางจาก Excel (คลุมดำตั้งแต่ Header) แล้ววางลงในช่องนี้</p>
+        <div className="mb-2 flex items-center justify-between">
+          <label className="text-sm font-bold text-slate-700">วางข้อมูลจาก Excel</label>
+          <span className="text-xs text-slate-400 font-medium bg-slate-100 px-2 py-1 rounded">คลุมดำตารางรวมหัวคอลัมน์แล้วกด Ctrl+V</span>
+        </div>
         
         <textarea
-          className="w-full h-64 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-mono text-sm mb-4 whitespace-pre"
+          className="w-full h-72 p-4 border-2 border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono text-sm mb-6 whitespace-pre outline-none transition-all resize-none shadow-inner bg-slate-50 focus:bg-white"
           placeholder="วางข้อมูลลงที่นี่..."
           value={textData}
           onChange={(e) => setTextData(e.target.value)}
@@ -121,10 +153,15 @@ function Admin() {
         
         <button
           onClick={handleUpload}
-          disabled={loading}
-          className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
+          disabled={loading || !textData.trim()}
+          className={`w-full flex justify-center items-center gap-2 font-bold py-4 rounded-xl shadow-lg transition-all ${
+            loading || !textData.trim()
+              ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+              : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-indigo-500/30 hover:-translate-y-1'
+          }`}
         >
-          {loading ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
+          <UploadCloud size={20} />
+          {loading ? 'กำลังบันทึกและประมวลผล...' : 'อัปโหลดข้อมูลเข้าระบบ'}
         </button>
       </div>
     </div>
