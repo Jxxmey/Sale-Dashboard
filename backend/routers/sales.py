@@ -74,19 +74,51 @@ def get_sales_summary(period: str, date: Optional[str] = None):
         df = df[df[officer_id_col].isin(pia_ids)]
         if df.empty: return [] 
         
-        df['ราคาขายตามบิล'] = pd.to_numeric(df['ราคาขายตามบิล'].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
-        df['Number'] = pd.to_numeric(df['Number'].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
+        # ค้นหาคอลัมน์ยอดขายและจำนวน
+        price_col = next((c for c in ['ราคาขายตามบิล', 'Sales', 'Total', 'ยอดขาย'] if c in df.columns), None)
+        if price_col:
+            df['ราคาขายตามบิล'] = pd.to_numeric(df[price_col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
+        else:
+            df['ราคาขายตามบิล'] = 0
+
+        qty_col = next((c for c in ['Number', 'Qty', 'Quantity', 'จำนวน'] if c in df.columns), None)
+        if qty_col:
+            df['Number'] = pd.to_numeric(df[qty_col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
+        else:
+            df['Number'] = 1
+
+        # 🌟 ค้นหาคอลัมน์ Product Code ให้เจอแน่นอน 100%
+        prod_col = next((c for c in ['Product (Code)', 'Product Code', 'รหัสสินค้า'] if c in df.columns), None)
+        if prod_col:
+            df['Product (Code)'] = df[prod_col].fillna('').astype(str).str.strip().str.upper()
+        else:
+            df['Product (Code)'] = ''
+
         df['Category (Name)'] = df['Category (Name)'].fillna('').astype(str).str.strip().str.upper()
-        df['Product (Code)'] = df['Product (Code)'].fillna('').astype(str).str.strip().str.upper() if 'Product (Code)' in df.columns else ''
         df['Brand'] = df['Brand'].fillna('').astype(str).str.strip().str.upper()
         df['Customer (Code)'] = df['Customer (Code)'].fillna('').astype(str).str.strip()
         df['Sub Category'] = df['Sub Category'].fillna('').astype(str).str.strip().str.upper() if 'Sub Category' in df.columns else ''
 
         def assign_category(row):
-            cat, prod_code, brand = row['Category (Name)'], row['Product (Code)'], row['Brand']
-            smile_products = ["COVERPLUS1007", "COVERPLUS2007", "COVERPLUS3007", "COVERPLUS1001", "COVERPLUS2001", "COVERPLUS3001", "COVERPLUS1003", "COVERPLUS2003", "COVERPLUS3003", "COVERPLUS1002", "COVERPLUS2002", "COVERPLUS3002", "COVERPLUS1004", "COVERPLUS2004", "COVERPLUS3004", "COVERPLUS1005", "COVERPLUS2005", "COVERPLUS3005"]
-            if prod_code in smile_products: return "Cover+"
-            if cat == "PROMO OPERATOR": return "Sim"
+            cat = row['Category (Name)']
+            prod_code = row['Product (Code)']
+            brand = row['Brand']
+            sub_cat = row['Sub Category']
+            
+            # 🌟 ดักจับจาก Product Code เป๊ะๆ ตามที่ผู้ใช้แจ้งมา
+            smile_products = [
+                "COVERPLUS1007", "COVERPLUS2007", "COVERPLUS3007", 
+                "COVERPLUS1001", "COVERPLUS2001", "COVERPLUS3001", 
+                "COVERPLUS1003", "COVERPLUS2003", "COVERPLUS3003", 
+                "COVERPLUS1002", "COVERPLUS2002", "COVERPLUS3002", 
+                "COVERPLUS1004", "COVERPLUS2004", "COVERPLUS3004", 
+                "COVERPLUS1005", "COVERPLUS2005", "COVERPLUS3005"
+            ]
+            
+            if prod_code in smile_products: 
+                return "Cover+"
+            
+            if cat == "PROMO OPERATOR" or "SIM" in cat or "SIM" in sub_cat: return "Sim"
             if cat == "MAC": return "Mac"
             if cat == "IPAD": return "iPad"
             if cat == "IPHONE": return "iPhone"
@@ -96,9 +128,11 @@ def get_sales_summary(period: str, date: Optional[str] = None):
             return "3RD"
 
         df['Grouped_Cat'] = df.apply(assign_category, axis=1)
+        
+        # ยอด Cover+ และ Sim จะนับเป็น "ชิ้น" ส่วนเครื่องอื่นๆ นับเป็น "บาท"
         df['Calculate_Value'] = np.where(df['Grouped_Cat'].isin(['Cover+', 'Sim']), df['Number'], df['ราคาขายตามบิล'])
 
-        # 🌟 คำนวณเฉพาะจำนวนเครื่อง iPhone ที่ขายได้ (iPhone Units) สำหรับนำไปหารเปอร์เซ็นต์พ่วง
+        # คำนวณจำนวนเครื่อง iPhone ที่ขายได้ (นำไปเป็นฐานหาร % การพ่วง)
         iphone_mask = df['Grouped_Cat'] == 'iPhone'
         iphone_units_df = df[iphone_mask].groupby([officer_id_col, 'Officer (Name)'])['Number'].sum().reset_index()
         iphone_units_df.rename(columns={'Number': 'iPhone_Units'}, inplace=True)
@@ -117,6 +151,7 @@ def get_sales_summary(period: str, date: Optional[str] = None):
         ufund_counts = ufund_df.groupby([officer_id_col, 'Officer (Name)'])['Number'].sum().reset_index()
         ufund_counts.rename(columns={'Number': 'UFUND PERSONAL'}, inplace=True)
 
+        # รวมตารางทั้งหมดเข้าด้วยกัน
         final_df = pd.merge(sales_pivot, ufund_counts, on=[officer_id_col, 'Officer (Name)'], how='left')
         final_df = pd.merge(final_df, iphone18_sales, on=[officer_id_col, 'Officer (Name)'], how='left')
         final_df = pd.merge(final_df, iphone_units_df, on=[officer_id_col, 'Officer (Name)'], how='left')
@@ -160,8 +195,13 @@ def get_pc_summary(period: str, date: Optional[str] = None):
     try:
         df = pd.read_csv(filepath, sep=None, engine='python')
         df.columns = df.columns.str.strip()
-        df['ราคาขายตามบิล'] = pd.to_numeric(df['ราคาขายตามบิล'].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
         
+        price_col = next((c for c in ['ราคาขายตามบิล', 'Sales', 'Total', 'ยอดขาย'] if c in df.columns), None)
+        if price_col:
+            df['ราคาขายตามบิล'] = pd.to_numeric(df[price_col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
+        else:
+            df['ราคาขายตามบิล'] = 0
+            
         df['Brand'] = df['Brand'].fillna('').astype(str).str.strip().str.upper()
         df['Clean_Brand'] = df['Brand'].apply(lambda b: str(b).upper().replace(' ', ''))
         
