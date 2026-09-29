@@ -11,7 +11,6 @@ function Monthly() {
   const [isCapturing, setIsCapturing] = useState(false);
   const captureRef = useRef(null);
   
-  // State สำหรับเปิด Modal บนมือถือ
   const [selectedOfficer, setSelectedOfficer] = useState(null);
   
   const today = new Date();
@@ -99,12 +98,64 @@ function Monthly() {
     return <div className="text-center font-bold text-slate-400 text-xs w-[18px]">{rank}</div>;
   };
 
-  const PercentBadge = ({ value }) => {
+  const PercentBadge = ({ value, isDark = false }) => {
     const num = Number(value);
-    if (num <= 0 || isNaN(num)) return <span className="text-slate-400 text-[9px] font-medium">-</span>;
-    if (num >= 100) return <span className="text-emerald-600 text-[10px] font-black">({num.toFixed(0)}%)</span>;
-    if (num >= 80) return <span className="text-amber-600 text-[10px] font-black">({num.toFixed(0)}%)</span>;
-    return <span className="text-rose-500 text-[10px] font-black">({num.toFixed(0)}%)</span>;
+    if (num <= 0 || isNaN(num)) return <span className={`${isDark ? 'text-slate-500' : 'text-slate-400'} text-[9px] font-medium`}>-</span>;
+    if (num >= 100) return <span className={`${isDark ? 'text-emerald-400' : 'text-emerald-600'} text-[10px] font-black`}>({num.toFixed(0)}%)</span>;
+    if (num >= 80) return <span className={`${isDark ? 'text-amber-400' : 'text-amber-600'} text-[10px] font-black`}>({num.toFixed(0)}%)</span>;
+    return <span className={`${isDark ? 'text-rose-400' : 'text-rose-500'} text-[10px] font-black`}>({num.toFixed(0)}%)</span>;
+  };
+
+  // 🌟 ฟังก์ชันเรนเดอร์ช่องตาราง (Body) รวบ Actual + Forecast + Percent
+  const renderTableCell = (target, actual, options = {}) => {
+    const { 
+      bgClass = "", 
+      textClass = "text-slate-700", 
+      fcClass = "text-slate-400",
+      alignClass = "text-right",
+      flexJustify = "justify-end",
+      showPct = true 
+    } = options;
+    
+    const forecast = calcForecast(actual);
+    
+    return (
+      <td className={`px-4 py-2 ${alignClass} border-l border-slate-100 ${bgClass}`}>
+        <div className={`font-black text-sm ${textClass}`}>{formatMoney(actual)}</div>
+        <div className={`flex items-center ${flexJustify} gap-1 mt-0.5`}>
+          <span className={`text-[9px] font-bold ${fcClass} opacity-80`}>
+            F:{formatMoney(forecast)}
+          </span>
+          {showPct && <PercentBadge value={target > 0 ? (actual / target) * 100 : 0} isDark={false} />}
+        </div>
+      </td>
+    );
+  };
+
+  // 🌟 ฟังก์ชันเรนเดอร์ช่องตาราง (Footer) รวบ Actual + Forecast + Percent
+  const renderFooterCell = (target, actual, options = {}) => {
+    const { 
+      bgClass = "bg-transparent", 
+      textClass = "text-slate-300", 
+      fcClass = "text-slate-500",
+      alignClass = "text-right",
+      flexJustify = "justify-end",
+      showPct = true 
+    } = options;
+    
+    const forecast = calcForecast(actual);
+    
+    return (
+      <td className={`px-4 py-3 ${alignClass} border-l border-slate-700 ${bgClass}`}>
+        <div className={`font-black text-sm ${textClass}`}>{formatMoney(actual)}</div>
+        <div className={`flex items-center ${flexJustify} gap-1 mt-0.5`}>
+          <span className={`text-[9px] font-bold ${fcClass}`}>
+            F:{formatMoney(forecast)}
+          </span>
+          {showPct && <PercentBadge value={target > 0 ? (actual / target) * 100 : 0} isDark={true} />}
+        </div>
+      </td>
+    );
   };
 
   const CategoryCard = ({ title, target, actual, hasTarget = true, hasForecast = true, colorTheme = "indigo", isAdj = false }) => {
@@ -116,7 +167,7 @@ function Monthly() {
       amber: { header: 'bg-amber-100 text-amber-800 border-amber-200' },
       rose: { header: 'bg-rose-100 text-rose-800 border-rose-200' },
       dark: { header: 'bg-slate-700 text-white border-slate-600' },
-      adj: { header: 'bg-rose-600 text-white border-rose-700' } // ธีมพิเศษสำหรับ Adjusted
+      adj: { header: 'bg-rose-600 text-white border-rose-700' }
     };
     const isDark = colorTheme === 'dark';
     const isAdjTheme = colorTheme === 'adj';
@@ -137,7 +188,7 @@ function Monthly() {
             <span className="font-bold">Actual</span>
             <div className="flex items-center gap-1">
               <span className="font-black">{formatMoney(actual)}</span>
-              {hasTarget && <PercentBadge value={target > 0 ? (actual / target) * 100 : 0} />}
+              {hasTarget && <PercentBadge value={target > 0 ? (actual / target) * 100 : 0} isDark={isDark} />}
             </div>
           </div>
           {hasForecast && (
@@ -145,25 +196,12 @@ function Monthly() {
               <span className="font-bold">Forecast</span>
               <div className="flex items-center gap-1">
                 <span className="font-black">{formatMoney(forecast)}</span>
-                {hasTarget && <PercentBadge value={target > 0 ? (forecast / target) * 100 : 0} />}
+                {hasTarget && <PercentBadge value={target > 0 ? (forecast / target) * 100 : 0} isDark={isDark} />}
               </div>
             </div>
           )}
         </div>
       </div>
-    );
-  };
-
-  const renderAdjKPI = (target, actual, isTotal = false) => {
-    const forecast = calcForecast(actual);
-    const color = isTotal ? 'text-indigo-700 bg-indigo-50/50' : 'text-rose-700 bg-rose-50/50';
-    return (
-      <React.Fragment>
-        <td className={`px-2 py-2 text-right border-l-2 border-slate-300 font-bold ${color}`}>{formatMoney(actual)}</td>
-        <td className="px-1 py-2 text-center"><PercentBadge value={target > 0 ? (actual / target) * 100 : 0} /></td>
-        <td className={`px-2 py-2 text-right font-bold text-slate-700 bg-slate-50/50`}>{formatMoney(forecast)}</td>
-        <td className="px-1 py-2 text-center"><PercentBadge value={target > 0 ? (forecast / target) * 100 : 0} /></td>
-      </React.Fragment>
     );
   };
 
@@ -179,9 +217,8 @@ function Monthly() {
         useCORS: true,
         backgroundColor: '#f8fafc',
         onclone: (clonedDoc) => {
-          // 🌟 เทคนิคพิเศษ: บังคับกางหน้าจอคอมให้ถ่ายรูป
           const refEl = clonedDoc.getElementById('capture-container');
-          if(refEl) refEl.style.width = '1200px'; 
+          if(refEl) refEl.style.width = '1400px'; // ขยายความกว้างตอนถ่ายให้แสดงผลครบ
           
           const desktopView = clonedDoc.getElementById('desktop-view');
           if (desktopView) {
@@ -215,7 +252,6 @@ function Monthly() {
     }
   };
 
-  // Helper ดึงข้อมูลคนที่จะโชว์ใน Modal
   const getModalData = () => {
     if (!selectedOfficer) return null;
     if (selectedOfficer.isStoreInfo) {
@@ -359,14 +395,95 @@ function Monthly() {
                 })}
               </div>
 
-              {/* ตารางหักลบ iPhone 18 */}
+              {/* 🌟 1. ตารางหลักโชว์ทุกยอดขายของเดือน */}
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mt-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left border-collapse min-w-max">
+                    <thead>
+                      <tr>
+                        <th colSpan="3" className="bg-white"></th>
+                        <th className="text-center py-2 text-[10px] font-bold text-white bg-indigo-600 border-b-2 border-indigo-700">🏆 ยอดรวมทั้งหมด (Total)</th>
+                        <th colSpan="4" className="text-center py-2 text-[10px] font-bold text-indigo-700 bg-indigo-50 border-b-2 border-indigo-100 border-l border-white">🍎 Apple Core</th>
+                        <th colSpan="2" className="text-center py-2 text-[10px] font-bold text-teal-700 bg-teal-50 border-b-2 border-teal-100 border-l border-white">🎧 Accessories</th>
+                        <th colSpan="3" className="text-center py-2 text-[10px] font-bold text-amber-700 bg-amber-50 border-b-2 border-amber-100 border-l border-white">📱 Services</th>
+                        <th colSpan="1" className="text-center py-2 text-[10px] font-bold text-rose-700 bg-rose-50 border-b-2 border-rose-100 border-l border-white">🎓 Special</th>
+                      </tr>
+                      <tr className="text-[11px] text-slate-600 uppercase border-b border-slate-200 bg-slate-50/80">
+                        <th className="px-4 py-3 text-center font-bold">Rank</th>
+                        <th className="px-4 py-3 font-bold">พนักงาน (Sales)</th>
+                        <th className="px-2 py-3 font-bold text-slate-400">รหัส</th>
+                        <th className="px-5 py-3 text-right text-indigo-700 font-bold border-l border-slate-200">Total Sales</th>
+                        <th className="px-4 py-3 text-right font-bold border-l border-slate-200">Mac</th>
+                        <th className="px-4 py-3 text-right font-bold">iPad</th>
+                        <th className="px-4 py-3 text-right font-bold">iPhone</th>
+                        <th className="px-4 py-3 text-right font-bold">Watch</th>
+                        <th className="px-4 py-3 text-right font-bold border-l border-slate-200">ABA</th>
+                        <th className="px-4 py-3 text-right font-bold">3RD</th>
+                        <th className="px-4 py-3 text-right font-bold border-l border-slate-200">Cover+</th>
+                        <th className="px-4 py-3 text-right font-bold">Sim</th>
+                        <th className="px-4 py-3 text-right font-bold">PVL</th>
+                        <th className="px-5 py-3 text-center font-bold border-l border-slate-200">UFUND</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {sortedData.map((officer, index) => {
+                        const total = calculateActual(officer);
+                        return (
+                          <tr key={index} className="hover:bg-indigo-50/30 transition-colors whitespace-nowrap">
+                            <td className="px-4 py-3 align-middle"><RankIcon rank={index + 1} /></td>
+                            <td className="px-4 py-3 flex items-center gap-3">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-[10px] shadow-sm ${getAvatarColor(officer.OfficerName)}`}>
+                                {officer.OfficerName.charAt(0)}
+                              </div>
+                              <span className="font-bold text-slate-700 text-sm">{officer.OfficerName}</span>
+                            </td>
+                            <td className="px-2 py-3 text-[10px] text-slate-400 font-mono">{officer.OfficerID}</td>
+                            
+                            {renderTableCell(officer.Target_Total, total, { bgClass: 'bg-indigo-50/40', textClass: 'text-indigo-600', fcClass: 'text-indigo-400' })}
+                            {renderTableCell(officer.Target_Mac, officer.Mac, { textClass: 'text-slate-600' })}
+                            {renderTableCell(officer.Target_iPad, officer.iPad, { textClass: 'text-slate-600' })}
+                            {renderTableCell(officer.Target_iPhone, officer.iPhone, { textClass: 'text-slate-600' })}
+                            {renderTableCell(officer.Target_AppleWatch, officer['Apple Watch'], { textClass: 'text-slate-600' })}
+                            {renderTableCell(officer.Target_ABA, officer.ABA, { textClass: 'text-slate-600' })}
+                            {renderTableCell(officer.Target_3RD, officer['3RD'], { textClass: 'text-slate-600' })}
+                            {renderTableCell(null, officer['Cover+'], { textClass: 'text-slate-500', showPct: false })}
+                            {renderTableCell(officer.Target_Sim, officer.Sim, { textClass: 'text-slate-500' })}
+                            {renderTableCell(null, officer.PVL, { textClass: 'text-slate-500', showPct: false })}
+                            {renderTableCell(null, officer['UFUND PERSONAL'], { bgClass: 'bg-rose-50/30', textClass: 'text-rose-600', fcClass: 'text-rose-400', alignClass: 'text-center', flexJustify: 'justify-center', showPct: false })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    {sortedData.length > 0 && (
+                      <tfoot className="bg-slate-800 text-white font-bold whitespace-nowrap">
+                        <tr>
+                          <td colSpan="3" className="px-5 py-4 text-right text-slate-400 text-[10px] uppercase tracking-widest">Total Store :</td>
+                          {renderFooterCell(storeTotals.Target_Total, storeTotals.Actual_Total, { bgClass: 'bg-white/5', textClass: 'text-indigo-300', fcClass: 'text-indigo-400/70' })}
+                          {renderFooterCell(storeTotals.Target_Mac, storeTotals.Mac)}
+                          {renderFooterCell(storeTotals.Target_iPad, storeTotals.iPad)}
+                          {renderFooterCell(storeTotals.Target_iPhone, storeTotals.iPhone)}
+                          {renderFooterCell(storeTotals.Target_AppleWatch, storeTotals['Apple Watch'])}
+                          {renderFooterCell(storeTotals.Target_ABA, storeTotals.ABA)}
+                          {renderFooterCell(storeTotals.Target_3RD, storeTotals['3RD'])}
+                          {renderFooterCell(null, storeTotals['Cover+'], { textClass: 'text-slate-400', showPct: false })}
+                          {renderFooterCell(storeTotals.Target_Sim, storeTotals.Sim, { textClass: 'text-slate-400' })}
+                          {renderFooterCell(null, storeTotals.PVL, { textClass: 'text-slate-400', showPct: false })}
+                          {renderFooterCell(null, storeTotals['UFUND PERSONAL'], { bgClass: 'bg-rose-900/30', textClass: 'text-rose-300', fcClass: 'text-rose-400/70', alignClass: 'text-center', flexJustify: 'justify-center', showPct: false })}
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+
+              {/* 🌟 2. ตารางพิเศษ หักลบ iPhone 18 */}
               {sortedData.length > 0 && (
                 <div className="mt-4 bg-white rounded-2xl shadow-md border-2 border-rose-100 overflow-hidden">
                   <div className="p-4 bg-rose-50 border-b border-rose-100 flex items-center gap-2">
                     <AlertCircle size={20} className="text-rose-500" />
                     <div>
                       <h2 className="text-sm font-black text-rose-700">ตารางสรุปยอดขาย (ไม่รวมยอดขาย iPhone 18 Pro / Pro Max)</h2>
-                      <p className="text-[11px] text-slate-500 mt-0.5">คอลัมน์ "Adjusted Total" และ "Adjusted iPhone" ถูกหักลบยอดขายของ iPhone 18 Pro/Pro Max ออกไปแล้ว</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">ถูกหักลบยอดขายของ iPhone 18 ออกไปแล้ว โดยมี Actual, Forecast และ % แจกแจงในแต่ละช่อง</p>
                     </div>
                   </div>
                   <div className="overflow-x-auto">
@@ -383,14 +500,14 @@ function Monthly() {
                           <th className="px-3 py-2 font-bold">พนักงาน</th>
                           <th className="px-4 py-2 text-right font-bold border-l border-slate-200">Adj. Total Sales</th>
                           <th className="px-4 py-2 text-right font-bold border-l border-slate-200">Adj. iPhone</th>
-                          <th className="px-3 py-2 text-right font-bold border-l border-slate-200">Mac</th>
-                          <th className="px-3 py-2 text-right font-bold">iPad</th>
-                          <th className="px-3 py-2 text-right font-bold">Watch</th>
-                          <th className="px-3 py-2 text-right font-bold">ABA</th>
-                          <th className="px-3 py-2 text-right font-bold">3RD</th>
-                          <th className="px-3 py-2 text-right font-bold">Cover+</th>
-                          <th className="px-3 py-2 text-right font-bold">Sim</th>
-                          <th className="px-3 py-2 text-right font-bold">PVL</th>
+                          <th className="px-4 py-2 text-right font-bold border-l border-slate-200">Mac</th>
+                          <th className="px-4 py-2 text-right font-bold">iPad</th>
+                          <th className="px-4 py-2 text-right font-bold">Watch</th>
+                          <th className="px-4 py-2 text-right font-bold">ABA</th>
+                          <th className="px-4 py-2 text-right font-bold">3RD</th>
+                          <th className="px-4 py-2 text-right font-bold">Cover+</th>
+                          <th className="px-4 py-2 text-right font-bold">Sim</th>
+                          <th className="px-4 py-2 text-right font-bold">PVL</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -403,41 +520,38 @@ function Monthly() {
                             <tr key={index} className="hover:bg-rose-50/40 transition-colors whitespace-nowrap">
                               <td className="px-3 py-2 text-center font-bold text-slate-400">{index + 1}</td>
                               <td className="px-3 py-2 font-bold text-slate-700">{officer.OfficerName}</td>
-                              {renderAdjKPI(officer.Target_Total, adjTotal, true)}
-                              {renderAdjKPI(officer.Target_iPhone, adjIphone, false)}
-                              <td className="px-3 py-2 text-right text-slate-600 border-l border-slate-100">{formatMoney(officer.Mac)}</td>
-                              <td className="px-3 py-2 text-right text-slate-600">{formatMoney(officer.iPad)}</td>
-                              <td className="px-3 py-2 text-right text-slate-600">{formatMoney(officer['Apple Watch'])}</td>
-                              <td className="px-3 py-2 text-right text-slate-600">{formatMoney(officer.ABA)}</td>
-                              <td className="px-3 py-2 text-right text-slate-600">{formatMoney(officer['3RD'])}</td>
-                              <td className="px-3 py-2 text-right text-slate-500">{formatMoney(officer['Cover+'])}</td>
-                              <td className="px-3 py-2 text-right text-slate-500">{formatMoney(officer.Sim)}</td>
-                              <td className="px-3 py-2 text-right text-slate-500">{formatMoney(officer.PVL)}</td>
+                              
+                              {renderTableCell(officer.Target_Total, adjTotal, { bgClass: 'bg-indigo-50/50', textClass: 'text-indigo-700', fcClass: 'text-indigo-400' })}
+                              {renderTableCell(officer.Target_iPhone, adjIphone, { bgClass: 'bg-rose-50/50', textClass: 'text-rose-700', fcClass: 'text-rose-400' })}
+                              
+                              {renderTableCell(officer.Target_Mac, officer.Mac, { textClass: 'text-slate-600' })}
+                              {renderTableCell(officer.Target_iPad, officer.iPad, { textClass: 'text-slate-600' })}
+                              {renderTableCell(officer.Target_AppleWatch, officer['Apple Watch'], { textClass: 'text-slate-600' })}
+                              {renderTableCell(officer.Target_ABA, officer.ABA, { textClass: 'text-slate-600' })}
+                              {renderTableCell(officer.Target_3RD, officer['3RD'], { textClass: 'text-slate-600' })}
+                              {renderTableCell(null, officer['Cover+'], { textClass: 'text-slate-500', showPct: false })}
+                              {renderTableCell(officer.Target_Sim, officer.Sim, { textClass: 'text-slate-500' })}
+                              {renderTableCell(null, officer.PVL, { textClass: 'text-slate-500', showPct: false })}
                             </tr>
                           );
                         })}
                       </tbody>
+                      
                       <tfoot className="bg-slate-800 text-white font-bold whitespace-nowrap">
                         <tr>
                           <td colSpan="2" className="px-3 py-3 text-right text-slate-400 text-[10px] uppercase">Adjusted Total Store :</td>
-                          <td className="px-4 py-3 text-right text-indigo-300 font-bold border-l border-slate-700 bg-indigo-900/30">{formatMoney(storeTotals.Actual_Total - storeTotals.iPhone_18)}</td>
-                          <td className="px-1 py-3 text-center bg-indigo-900/30"><PercentBadge value={storeTotals.Target_Total > 0 ? ((storeTotals.Actual_Total - storeTotals.iPhone_18) / storeTotals.Target_Total) * 100 : 0} /></td>
-                          <td className="px-2 py-3 text-right text-indigo-200 bg-indigo-900/30">{formatMoney(calcForecast(storeTotals.Actual_Total - storeTotals.iPhone_18))}</td>
-                          <td className="px-1 py-3 text-center bg-indigo-900/30"><PercentBadge value={storeTotals.Target_Total > 0 ? (calcForecast(storeTotals.Actual_Total - storeTotals.iPhone_18) / storeTotals.Target_Total) * 100 : 0} /></td>
                           
-                          <td className="px-4 py-3 text-right text-rose-300 font-bold border-l border-slate-700 bg-rose-900/30">{formatMoney(storeTotals.iPhone - storeTotals.iPhone_18)}</td>
-                          <td className="px-1 py-3 text-center bg-rose-900/30"><PercentBadge value={storeTotals.Target_iPhone > 0 ? ((storeTotals.iPhone - storeTotals.iPhone_18) / storeTotals.Target_iPhone) * 100 : 0} /></td>
-                          <td className="px-2 py-3 text-right text-rose-200 bg-rose-900/30">{formatMoney(calcForecast(storeTotals.iPhone - storeTotals.iPhone_18))}</td>
-                          <td className="px-1 py-3 text-center bg-rose-900/30"><PercentBadge value={storeTotals.Target_iPhone > 0 ? (calcForecast(storeTotals.iPhone - storeTotals.iPhone_18) / storeTotals.Target_iPhone) * 100 : 0} /></td>
+                          {renderFooterCell(storeTotals.Target_Total, storeTotals.Actual_Total - storeTotals.iPhone_18, { bgClass: 'bg-indigo-900/30', textClass: 'text-indigo-300', fcClass: 'text-indigo-400/70' })}
+                          {renderFooterCell(storeTotals.Target_iPhone, storeTotals.iPhone - storeTotals.iPhone_18, { bgClass: 'bg-rose-900/30', textClass: 'text-rose-300', fcClass: 'text-rose-400/70' })}
                           
-                          <td className="px-3 py-3 text-right text-slate-300 border-l border-slate-700">{formatMoney(storeTotals.Mac)}</td>
-                          <td className="px-3 py-3 text-right text-slate-300">{formatMoney(storeTotals.iPad)}</td>
-                          <td className="px-3 py-3 text-right text-slate-300">{formatMoney(storeTotals['Apple Watch'])}</td>
-                          <td className="px-3 py-3 text-right text-slate-300">{formatMoney(storeTotals.ABA)}</td>
-                          <td className="px-3 py-3 text-right text-slate-300">{formatMoney(storeTotals['3RD'])}</td>
-                          <td className="px-3 py-3 text-right text-slate-400">{formatMoney(storeTotals['Cover+'])}</td>
-                          <td className="px-3 py-3 text-right text-slate-400">{formatMoney(storeTotals.Sim)}</td>
-                          <td className="px-3 py-3 text-right text-slate-400">{formatMoney(storeTotals.PVL)}</td>
+                          {renderFooterCell(storeTotals.Target_Mac, storeTotals.Mac)}
+                          {renderFooterCell(storeTotals.Target_iPad, storeTotals.iPad)}
+                          {renderFooterCell(storeTotals.Target_AppleWatch, storeTotals['Apple Watch'])}
+                          {renderFooterCell(storeTotals.Target_ABA, storeTotals.ABA)}
+                          {renderFooterCell(storeTotals.Target_3RD, storeTotals['3RD'])}
+                          {renderFooterCell(null, storeTotals['Cover+'], { textClass: 'text-slate-400', showPct: false })}
+                          {renderFooterCell(storeTotals.Target_Sim, storeTotals.Sim, { textClass: 'text-slate-400' })}
+                          {renderFooterCell(null, storeTotals.PVL, { textClass: 'text-slate-400', showPct: false })}
                         </tr>
                       </tfoot>
                     </table>
@@ -446,12 +560,8 @@ function Monthly() {
               )}
             </div>
 
-            {/* ======================================= */}
-            {/* 📱 โหมด Mobile: แถวการ์ดพนักงานขนาดเล็ก */}
-            {/* ======================================= */}
+            {/* โหมด Mobile: แถวการ์ดพนักงานขนาดเล็ก */}
             <div id="mobile-view" className="lg:hidden flex flex-col gap-3">
-              
-              {/* การ์ดร้านค้าหลัก */}
               <div onClick={() => setSelectedOfficer({ isStoreInfo: true })} className="bg-indigo-600 rounded-2xl p-4 shadow-lg flex items-center justify-between active:scale-95 transition-transform">
                 <div className="flex items-center gap-3 text-white">
                   <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center"><Trophy size={20}/></div>
@@ -469,7 +579,6 @@ function Monthly() {
                 </div>
               </div>
 
-              {/* การ์ดรายชื่อพนักงาน */}
               {sortedData.map((officer, index) => {
                 const total = calculateActual(officer);
                 return (
@@ -495,14 +604,11 @@ function Monthly() {
                 );
               })}
             </div>
-            
           </>
         )}
       </div>
 
-      {/* ======================================= */}
-      {/* 📱 Modal Popup (โชว์เมื่อกดเปิดการ์ดในมือถือ) */}
-      {/* ======================================= */}
+      {/* Modal Popup แสดงรายละเอียดบนมือถือ */}
       {mData && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/60 backdrop-blur-sm sm:items-center sm:p-4 transition-all">
           <div className="bg-slate-50 w-full sm:max-w-md rounded-t-[2rem] sm:rounded-3xl shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[90vh] animate-in slide-in-from-bottom-8">
