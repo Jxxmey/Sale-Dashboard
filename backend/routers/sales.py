@@ -74,38 +74,34 @@ def get_sales_summary(period: str, date: Optional[str] = None):
         df = df[df[officer_id_col].isin(pia_ids)]
         if df.empty: return [] 
         
-        # ค้นหาคอลัมน์ยอดขายและจำนวน
-        price_col = next((c for c in ['ราคาขายตามบิล', 'Sales', 'Total', 'ยอดขาย'] if c in df.columns), None)
-        if price_col:
-            df['ราคาขายตามบิล'] = pd.to_numeric(df[price_col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
+        # 🌟 กลับมาใช้ชื่อคอลัมน์ตรงๆ แบบเดิม (ป้องกันบั๊กยอด 0)
+        if 'ราคาขายตามบิล' in df.columns:
+            df['ราคาขายตามบิล'] = pd.to_numeric(df['ราคาขายตามบิล'].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
         else:
             df['ราคาขายตามบิล'] = 0
 
-        qty_col = next((c for c in ['Number', 'Qty', 'Quantity', 'จำนวน'] if c in df.columns), None)
-        if qty_col:
-            df['Number'] = pd.to_numeric(df[qty_col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
+        if 'Number' in df.columns:
+            df['Number'] = pd.to_numeric(df['Number'].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
         else:
             df['Number'] = 1
 
-        # 🌟 ค้นหาคอลัมน์ Product Code ให้เจอแน่นอน 100%
-        prod_col = next((c for c in ['Product (Code)', 'Product Code', 'รหัสสินค้า'] if c in df.columns), None)
-        if prod_col:
-            df['Product (Code)'] = df[prod_col].fillna('').astype(str).str.strip().str.upper()
+        if 'Product (Code)' in df.columns:
+            df['Product (Code)'] = df['Product (Code)'].fillna('').astype(str).str.strip().str.upper()
         else:
             df['Product (Code)'] = ''
 
-        df['Category (Name)'] = df['Category (Name)'].fillna('').astype(str).str.strip().str.upper()
-        df['Brand'] = df['Brand'].fillna('').astype(str).str.strip().str.upper()
-        df['Customer (Code)'] = df['Customer (Code)'].fillna('').astype(str).str.strip()
+        df['Category (Name)'] = df['Category (Name)'].fillna('').astype(str).str.strip().str.upper() if 'Category (Name)' in df.columns else ''
+        df['Brand'] = df['Brand'].fillna('').astype(str).str.strip().str.upper() if 'Brand' in df.columns else ''
+        df['Customer (Code)'] = df['Customer (Code)'].fillna('').astype(str).str.strip() if 'Customer (Code)' in df.columns else ''
         df['Sub Category'] = df['Sub Category'].fillna('').astype(str).str.strip().str.upper() if 'Sub Category' in df.columns else ''
 
         def assign_category(row):
-            cat = row['Category (Name)']
-            prod_code = row['Product (Code)']
-            brand = row['Brand']
-            sub_cat = row['Sub Category']
+            cat = row.get('Category (Name)', '')
+            prod_code = row.get('Product (Code)', '')
+            brand = row.get('Brand', '')
+            sub_cat = row.get('Sub Category', '')
             
-            # 🌟 ดักจับจาก Product Code เป๊ะๆ ตามที่ผู้ใช้แจ้งมา
+            # 🌟 ดักจับ Product (Code) ของ Cover+ ตรงๆ
             smile_products = [
                 "COVERPLUS1007", "COVERPLUS2007", "COVERPLUS3007", 
                 "COVERPLUS1001", "COVERPLUS2001", "COVERPLUS3001", 
@@ -129,14 +125,15 @@ def get_sales_summary(period: str, date: Optional[str] = None):
 
         df['Grouped_Cat'] = df.apply(assign_category, axis=1)
         
-        # ยอด Cover+ และ Sim จะนับเป็น "ชิ้น" ส่วนเครื่องอื่นๆ นับเป็น "บาท"
+        # Cover+ และ SIM นับจำนวนชิ้น ส่วนอื่นๆ นับเป็นราคาบาท
         df['Calculate_Value'] = np.where(df['Grouped_Cat'].isin(['Cover+', 'Sim']), df['Number'], df['ราคาขายตามบิล'])
 
-        # คำนวณจำนวนเครื่อง iPhone ที่ขายได้ (นำไปเป็นฐานหาร % การพ่วง)
+        # คำนวณจำนวนเครื่อง iPhone ที่ขายได้
         iphone_mask = df['Grouped_Cat'] == 'iPhone'
         iphone_units_df = df[iphone_mask].groupby([officer_id_col, 'Officer (Name)'])['Number'].sum().reset_index()
         iphone_units_df.rename(columns={'Number': 'iPhone_Units'}, inplace=True)
 
+        # หักยอด iPhone 18
         iphone18_mask = df['Sub Category'].isin(['IPHONE 18 PRO', 'IPHONE 18 PRO MAX'])
         iphone18_df = df[iphone18_mask].copy()
         iphone18_sales = iphone18_df.groupby([officer_id_col, 'Officer (Name)'])['Calculate_Value'].sum().reset_index()
@@ -144,15 +141,18 @@ def get_sales_summary(period: str, date: Optional[str] = None):
 
         sales_pivot = pd.pivot_table(df, values='Calculate_Value', index=[officer_id_col, 'Officer (Name)'], columns='Grouped_Cat', aggfunc='sum', fill_value=0).reset_index()
 
-        ufund_mask = df['Customer (Code)'].str.contains("UFUND", case=False, na=False)
-        ufund_df = df[ufund_mask].copy()
-        if 'ID' in ufund_df.columns: ufund_df = ufund_df.drop_duplicates(subset=['ID'])
-        elif 'Doc No' in ufund_df.columns: ufund_df = ufund_df.drop_duplicates(subset=['Doc No'])
-        ufund_counts = ufund_df.groupby([officer_id_col, 'Officer (Name)'])['Number'].sum().reset_index()
-        ufund_counts.rename(columns={'Number': 'UFUND PERSONAL'}, inplace=True)
+        ufund_counts = pd.DataFrame()
+        if 'Customer (Code)' in df.columns:
+            ufund_mask = df['Customer (Code)'].str.contains("UFUND", case=False, na=False)
+            ufund_df = df[ufund_mask].copy()
+            if 'ID' in ufund_df.columns: ufund_df = ufund_df.drop_duplicates(subset=['ID'])
+            elif 'Doc No' in ufund_df.columns: ufund_df = ufund_df.drop_duplicates(subset=['Doc No'])
+            ufund_counts = ufund_df.groupby([officer_id_col, 'Officer (Name)'])['Number'].sum().reset_index()
+            ufund_counts.rename(columns={'Number': 'UFUND PERSONAL'}, inplace=True)
 
-        # รวมตารางทั้งหมดเข้าด้วยกัน
-        final_df = pd.merge(sales_pivot, ufund_counts, on=[officer_id_col, 'Officer (Name)'], how='left')
+        final_df = pd.merge(sales_pivot, ufund_counts, on=[officer_id_col, 'Officer (Name)'], how='left') if not ufund_counts.empty else sales_pivot.copy()
+        if 'UFUND PERSONAL' not in final_df.columns: final_df['UFUND PERSONAL'] = 0
+
         final_df = pd.merge(final_df, iphone18_sales, on=[officer_id_col, 'Officer (Name)'], how='left')
         final_df = pd.merge(final_df, iphone_units_df, on=[officer_id_col, 'Officer (Name)'], how='left')
 
@@ -186,7 +186,9 @@ def get_sales_summary(period: str, date: Optional[str] = None):
             except Exception as e: print(f"[X] Target Error: {e}")
 
         return final_df.to_dict(orient="records")
-    except Exception as e: return []
+    except Exception as e: 
+        print("Exception in summary:", e)
+        return []
 
 @router.get("/summary/pc/{period}")
 def get_pc_summary(period: str, date: Optional[str] = None):
@@ -196,13 +198,12 @@ def get_pc_summary(period: str, date: Optional[str] = None):
         df = pd.read_csv(filepath, sep=None, engine='python')
         df.columns = df.columns.str.strip()
         
-        price_col = next((c for c in ['ราคาขายตามบิล', 'Sales', 'Total', 'ยอดขาย'] if c in df.columns), None)
-        if price_col:
-            df['ราคาขายตามบิล'] = pd.to_numeric(df[price_col].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
+        if 'ราคาขายตามบิล' in df.columns:
+            df['ราคาขายตามบิล'] = pd.to_numeric(df['ราคาขายตามบิล'].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce').fillna(0)
         else:
             df['ราคาขายตามบิล'] = 0
             
-        df['Brand'] = df['Brand'].fillna('').astype(str).str.strip().str.upper()
+        df['Brand'] = df['Brand'].fillna('').astype(str).str.strip().str.upper() if 'Brand' in df.columns else ''
         df['Clean_Brand'] = df['Brand'].apply(lambda b: str(b).upper().replace(' ', ''))
         
         pc_mapping = {
